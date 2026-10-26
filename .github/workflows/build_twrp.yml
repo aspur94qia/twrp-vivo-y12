@@ -5,53 +5,55 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout Repo
       uses: actions/checkout@v4
 
-    - name: Install Dependencies AIK
+    - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3 cpio android-sdk-platform-tools curl lib32z1 lib32ncurses6 file
+        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl wget
 
-    - name: Setup Android Image Kitchen
+    - name: Download Magiskboot
       run: |
-        git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
-        cd AIK
-        chmod -R +x .
+        wget https://github.com/morfik/termux-twrp-builder/raw/master/tools/magiskboot -O magiskboot
+        chmod +x magiskboot
 
     - name: Download Donor TWRP MT6765
       run: |
-        mkdir -p AIK/donor
-        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o AIK/donor/donor.img || true
+        mkdir -p donor
+        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o donor/donor.img || true
 
     - name: Unpack Stock & Donor
       run: |
-        cd AIK
-        bash unpackimg.sh --nosudo ../stock_recovery.img
-        mv split_img stock_split
-        mv ramdisk stock_ramdisk
+        mkdir -p stock_extracted donor_extracted
+        
+        # Unpack Stock Vivo Y12
+        cd stock_extracted
+        ../magiskboot unpack ../stock_recovery.img
+        cd ..
 
-        bash unpackimg.sh --nosudo donor/donor.img
-        mv split_img donor_split
-        mv ramdisk donor_ramdisk
+        # Unpack Donor MT6765
+        cd donor_extracted
+        ../magiskboot unpack ../donor/donor.img
+        cd ..
 
     - name: Swap Kernel & Repack TWRP
       run: |
-        cd AIK
-        mkdir -p split_img ramdisk
-        cp -r donor_ramdisk/* ramdisk/
-        cp -r donor_split/* split_img/
+        mkdir -p output_work
+        # Ambil ramdisk dari donor TWRP
+        cp donor_extracted/ramdisk.cpio output_work/
+        
+        # Swap Kernel (zImage/kernel) & DTB dari Stock Vivo Y12
+        cp stock_extracted/kernel output_work/ 2>/dev/null || cp donor_extracted/kernel output_work/
+        cp stock_extracted/dtb output_work/ 2>/dev/null || true
 
-        # Timpa zImage & DTB bawaan donor pakai punya Stock Vivo Y12
-        cp -f stock_split/*zImage split_img/ 2>/dev/null || true
-        cp -f stock_split/*dtb split_img/ 2>/dev/null || true
-
-        # Repack
-        bash repackimg.sh --nosudo
+        # Repack jadi TWRP Vivo Y12
+        cd output_work
+        ../magiskboot repack ramdisk.cpio twrp_vivo_y12.img
         mkdir -p ../output
-        mv image-new.img ../output/twrp_vivo_y12.img
+        mv new-boot.img ../output/twrp_vivo_y12.img 2>/dev/null || mv twrp_vivo_y12.img ../output/twrp_vivo_y12.img
 
     - name: Upload TWRP Result
       uses: actions/upload-artifact@v4
