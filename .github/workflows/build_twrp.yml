@@ -25,14 +25,11 @@ jobs:
     - name: Download Donor TWRP Asli (Redmi 6A MT6765)
       run: |
         mkdir -p donor
-        # Mengunduh dari server resmi TWRP dengan trik Referer agar tidak diblok menjadi HTML
         wget -q --show-progress --referer="https://eu.dl.twrp.me/cactus/" "https://eu.dl.twrp.me/cactus/twrp-3.7.0_9-0-cactus.img" -O donor/donor.img
         
-        # Analisa: Pastikan file yang terunduh ukurannya di atas 10MB (Bukan HTML)
         SIZE=$(stat -c%s "donor/donor.img" 2>/dev/null || echo 0)
-        echo "Ukuran file donor: $SIZE bytes"
         if [ "$SIZE" -lt 10000000 ]; then
-          echo "ERROR: File donor corrupt atau berupa HTML! Hentikan proses."
+          echo "ERROR: File donor corrupt! Hentikan proses."
           exit 1
         fi
 
@@ -40,34 +37,28 @@ jobs:
       run: |
         mkdir -p stock_extracted donor_extracted
         
-        echo "==> Unpack Stock Vivo Y12"
         cd stock_extracted
         ../magiskboot unpack ../stock_recovery.img
         cd ..
 
-        echo "==> Unpack Donor Redmi 6A MT6765"
         cd donor_extracted
         ../magiskboot unpack ../donor/donor.img
         cd ..
 
     - name: Swap Kernel & Repack TWRP
       run: |
-        mkdir -p output_work
+        # Timpa UI/Ramdisk TWRP donor ke folder ekstrak Vivo Y12
+        cp donor_extracted/ramdisk.cpio stock_extracted/
         
-        # 1. Ambil UI/Ramdisk TWRP dari donor
-        cp donor_extracted/ramdisk.cpio output_work/
+        # Masuk ke folder Vivo Y12 yang sekarang sudah berisi: Kernel Y12 + Ramdisk TWRP
+        cd stock_extracted
         
-        # 2. Ambil penggerak hardware (Kernel, DTB) dari Vivo Y12
-        cp stock_extracted/kernel output_work/ 2>/dev/null || true
-        cp stock_extracted/dtb output_work/ 2>/dev/null || true
-        cp stock_extracted/kernel_dtb output_work/ 2>/dev/null || true
-
-        # 3. Repack menjadi TWRP Vivo Y12
-        cd output_work
-        ../magiskboot repack ramdisk.cpio twrp_vivo_y12.img
+        # Repack menggunakan stock_recovery.img sebagai template header
+        ../magiskboot repack ../stock_recovery.img
         
+        # Pindahkan hasilnya ke folder output
         mkdir -p ../output
-        mv new-boot.img ../output/twrp_vivo_y12.img 2>/dev/null || mv twrp_vivo_y12.img ../output/twrp_vivo_y12.img
+        mv new-boot.img ../output/twrp_vivo_y12.img
 
     - name: Upload TWRP Result
       uses: actions/upload-artifact@v4
