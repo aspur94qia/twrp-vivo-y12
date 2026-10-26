@@ -13,17 +13,22 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl wget
+        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl wget unzip
 
-    - name: Download Magiskboot
+    - name: Setup Magiskboot (Official Biner)
       run: |
-        wget https://github.com/morfik/termux-twrp-builder/raw/master/tools/magiskboot -O magiskboot
+        # Download Magisk v27.0 Official
+        wget https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.zip
+        unzip -j magisk.zip "lib/x86_64/libmagiskboot.so" -d .
+        mv libmagiskboot.so magiskboot
         chmod +x magiskboot
 
     - name: Download Donor TWRP MT6765
       run: |
         mkdir -p donor
-        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o donor/donor.img || true
+        # Fetch TWRP MT6765 Android 9 Donor Image
+        curl -sL "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni/releases/download/twrp-9.0/twrp-9.0-mt6765.img" -o donor/donor.img || \
+        curl -sL "https://archive.org/download/twrp_donor_mt6765/twrp.img" -o donor/donor.img
 
     - name: Unpack Stock & Donor
       run: |
@@ -42,14 +47,14 @@ jobs:
     - name: Swap Kernel & Repack TWRP
       run: |
         mkdir -p output_work
-        # Ambil ramdisk dari donor TWRP
+        # Pindahkan ramdisk TWRP ke folder kerja
         cp donor_extracted/ramdisk.cpio output_work/
         
-        # Swap Kernel (zImage/kernel) & DTB dari Stock Vivo Y12
+        # Pindahkan Kernel & DTB dari Stock Vivo Y12
         cp stock_extracted/kernel output_work/ 2>/dev/null || cp donor_extracted/kernel output_work/
         cp stock_extracted/dtb output_work/ 2>/dev/null || true
 
-        # Repack jadi TWRP Vivo Y12
+        # Repack Image
         cd output_work
         ../magiskboot repack ramdisk.cpio twrp_vivo_y12.img
         mkdir -p ../output
