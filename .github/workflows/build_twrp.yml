@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout Repo
       uses: actions/checkout@v4
@@ -13,7 +13,7 @@ jobs:
     - name: Install Dependencies AIK
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl lib32z1 lib32ncurses6
+        sudo apt-get install -y build-essential python3 cpio android-sdk-platform-tools curl lib32z1 lib32ncurses6 file
 
     - name: Setup Android Image Kitchen
       run: |
@@ -21,28 +21,35 @@ jobs:
         cd AIK
         chmod -R +x .
 
-    - name: Download Donor TWRP MT6765 Valid
+    - name: Download Donor TWRP MT6765
       run: |
         mkdir -p AIK/donor
-        # Menggunakan donor TWRP MT6765 Android 9 resmi yang valid
-        curl -sL "https://github.com/twrpdtbo/resources/releases/download/v1.0/twrp_mt6765_android9_donor.img" -o AIK/donor/donor.img || \
-        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o AIK/donor/donor.img
+        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o AIK/donor/donor.img || true
 
     - name: Unpack Stock & Donor
       run: |
         cd AIK
-        ./unpackimg.sh ../stock_recovery.img --destination stock_extracted
-        ./unpackimg.sh donor/donor.img --destination donor_extracted
+        bash unpackimg.sh --nosudo ../stock_recovery.img
+        mv split_img stock_split
+        mv ramdisk stock_ramdisk
+
+        bash unpackimg.sh --nosudo donor/donor.img
+        mv split_img donor_split
+        mv ramdisk donor_ramdisk
 
     - name: Swap Kernel & Repack TWRP
       run: |
         cd AIK
-        # Timpa Kernel & DTB donor pakai punya Stock Vivo Y12
-        cp -f stock_extracted/split_img/stock_recovery.img-zImage donor_extracted/split_img/donor.img-zImage 2>/dev/null || cp -f stock_extracted/split_img/*zImage donor_extracted/split_img/*zImage
-        cp -f stock_extracted/split_img/stock_recovery.img-dtb donor_extracted/split_img/donor.img-dtb 2>/dev/null || cp -f stock_extracted/split_img/*dtb donor_extracted/split_img/*dtb
+        mkdir -p split_img ramdisk
+        cp -r donor_ramdisk/* ramdisk/
+        cp -r donor_split/* split_img/
 
-        # Build ulang TWRP
-        ./repackimg.sh --source donor_extracted
+        # Timpa zImage & DTB bawaan donor pakai punya Stock Vivo Y12
+        cp -f stock_split/*zImage split_img/ 2>/dev/null || true
+        cp -f stock_split/*dtb split_img/ 2>/dev/null || true
+
+        # Repack
+        bash repackimg.sh --nosudo
         mkdir -p ../output
         mv image-new.img ../output/twrp_vivo_y12.img
 
