@@ -1,4 +1,4 @@
-name: Port TWRP Vivo Y12 (Auto Base)
+name: Port TWRP Vivo Y12 MT6765
 
 on:
   workflow_dispatch:
@@ -7,37 +7,41 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Repository
+    - name: Checkout Repo
       uses: actions/checkout@v4
 
-    - name: Install Dependencies
+    - name: Install Dependencies AIK
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl wgzip
+        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl lib32z1 lib32ncurses6
 
-    - name: Clone AIK Tool
+    - name: Setup Android Image Kitchen
       run: |
         git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
         cd AIK
-        chmod +x *.sh
+        chmod -R +x .
 
-    - name: Download Latest TWRP Base MT6765
+    - name: Download Donor TWRP MT6765 Valid
       run: |
         mkdir -p AIK/donor
-        # Fetch base TWRP MT6765 image
-        curl -sL "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni/releases/download/twrp-9.0/twrp_redmi9a_mt6765.img" -o AIK/donor/donor.img
+        # Menggunakan donor TWRP MT6765 Android 9 resmi yang valid
+        curl -sL "https://github.com/twrpdtbo/resources/releases/download/v1.0/twrp_mt6765_android9_donor.img" -o AIK/donor/donor.img || \
+        curl -sL "https://raw.githubusercontent.com/minimal-manifest-twrp/platform_manifest_twrp_omni/twrp-9.0/twrp.img" -o AIK/donor/donor.img
 
-    - name: Unpack and Swap Kernel
+    - name: Unpack Stock & Donor
       run: |
         cd AIK
         ./unpackimg.sh ../stock_recovery.img --destination stock_extracted
         ./unpackimg.sh donor/donor.img --destination donor_extracted
 
-        # Swap Kernel & Device Tree (zImage & dtb)
-        cp -f stock_extracted/split_img/*-zImage donor_extracted/split_img/*-zImage 2>/dev/null || true
-        cp -f stock_extracted/split_img/*-dtb donor_extracted/split_img/*-dtb 2>/dev/null || true
+    - name: Swap Kernel & Repack TWRP
+      run: |
+        cd AIK
+        # Timpa Kernel & DTB donor pakai punya Stock Vivo Y12
+        cp -f stock_extracted/split_img/stock_recovery.img-zImage donor_extracted/split_img/donor.img-zImage 2>/dev/null || cp -f stock_extracted/split_img/*zImage donor_extracted/split_img/*zImage
+        cp -f stock_extracted/split_img/stock_recovery.img-dtb donor_extracted/split_img/donor.img-dtb 2>/dev/null || cp -f stock_extracted/split_img/*dtb donor_extracted/split_img/*dtb
 
-        # Repack Image
+        # Build ulang TWRP
         ./repackimg.sh --source donor_extracted
         mkdir -p ../output
         mv image-new.img ../output/twrp_vivo_y12.img
@@ -45,5 +49,5 @@ jobs:
     - name: Upload TWRP Result
       uses: actions/upload-artifact@v4
       with:
-        name: TWRP_Vivo_Y12
+        name: TWRP_Vivo_Y12_MT6765
         path: output/twrp_vivo_y12.img
