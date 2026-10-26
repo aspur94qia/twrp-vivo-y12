@@ -1,0 +1,49 @@
+name: Port TWRP Vivo Y12 (Auto Base)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3 cpio android-sdk-platform-tools curl wgzip
+
+    - name: Clone AIK Tool
+      run: |
+        git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+        cd AIK
+        chmod +x *.sh
+
+    - name: Download Latest TWRP Base MT6765
+      run: |
+        mkdir -p AIK/donor
+        # Fetch base TWRP MT6765 image
+        curl -sL "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni/releases/download/twrp-9.0/twrp_redmi9a_mt6765.img" -o AIK/donor/donor.img
+
+    - name: Unpack and Swap Kernel
+      run: |
+        cd AIK
+        ./unpackimg.sh ../stock_recovery.img --destination stock_extracted
+        ./unpackimg.sh donor/donor.img --destination donor_extracted
+
+        # Swap Kernel & Device Tree (zImage & dtb)
+        cp -f stock_extracted/split_img/*-zImage donor_extracted/split_img/*-zImage 2>/dev/null || true
+        cp -f stock_extracted/split_img/*-dtb donor_extracted/split_img/*-dtb 2>/dev/null || true
+
+        # Repack Image
+        ./repackimg.sh --source donor_extracted
+        mkdir -p ../output
+        mv image-new.img ../output/twrp_vivo_y12.img
+
+    - name: Upload TWRP Result
+      uses: actions/upload-artifact@v4
+      with:
+        name: TWRP_Vivo_Y12
+        path: output/twrp_vivo_y12.img
