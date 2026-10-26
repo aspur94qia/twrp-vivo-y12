@@ -22,12 +22,22 @@ jobs:
         mv libmagiskboot.so magiskboot
         chmod +x magiskboot
 
-    - name: Download Valid TWRP Base MT6765
+    - name: Download & Verify Donor TWRP
       run: |
         mkdir -p donor
-        # Direct download TWRP MT6765 murni dari SourceForge (Bukan HTML)
-        wget -c "https://downloads.sourceforge.net/project/twrp-mt6765/twrp-3.5.2_9-0-mt6765.img" -O donor/donor.img || \
+        
+        # Download dari GitHub Release Direct Asset
+        wget -q -O donor/donor.img "https://github.com/aosp-realm/releases/download/v1.0/twrp_mt6765_pie.img" || \
         curl -sL "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni/releases/download/twrp-9.0/twrp-9.0-mt6765.img" -o donor/donor.img
+
+        # Cek apakah file benar-benar image (bukan HTML) dan ukuran > 10MB
+        SIZE=$(stat -c%s "donor/donor.img" 2>/dev/null || echo 0)
+        echo "Ukuran file donor: $SIZE bytes"
+        
+        if [ "$SIZE" -lt 10000000 ]; then
+          echo "File corrupt/HTML, mengunduh dari mirror cadangan..."
+          curl -sL "https://archive.org/download/twrp_mt6765_pie/twrp.img" -o donor/donor.img
+        fi
 
     - name: Unpack Stock & Donor
       run: |
@@ -46,15 +56,15 @@ jobs:
     - name: Swap Kernel & Repack TWRP
       run: |
         mkdir -p output_work
-        # Ambil ramdisk fitur TWRP
+        # Salin ramdisk TWRP
         cp donor_extracted/ramdisk.cpio output_work/
         
-        # Pakai Kernel & DTB bawaan mesin Vivo Y12
+        # Salin Kernel & DTB dari Stock Vivo Y12
         cp stock_extracted/kernel output_work/ 2>/dev/null || true
         cp stock_extracted/dtb output_work/ 2>/dev/null || true
         cp stock_extracted/kernel_dtb output_work/ 2>/dev/null || true
 
-        # Repack jadi TWRP Vivo Y12
+        # Repack
         cd output_work
         ../magiskboot repack ramdisk.cpio twrp_vivo_y12.img
         mkdir -p ../output
